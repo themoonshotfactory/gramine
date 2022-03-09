@@ -448,9 +448,17 @@ long shim_do_sendfile(int out_fd, int in_fd, off_t* offset, size_t count) {
         goto out;
     }
 
-    if (offset && !in_hdl->fs->fs_ops->seek) {
-        ret = -ESPIPE;
-        goto out;
+    file_off_t pos_in = 0;
+    if (offset) {
+        if (!in_hdl->fs->fs_ops->seek) {
+            ret = -ESPIPE;
+            goto out;
+        }
+        pos_in = *offset;
+        if (pos_in < 0) {
+            ret = -EINVAL;
+            goto out;
+        }
     }
 
     int mode = out_hdl->flags & O_ACCMODE;
@@ -460,7 +468,6 @@ long shim_do_sendfile(int out_fd, int in_fd, off_t* offset, size_t count) {
         goto out;
     }
 
-    file_off_t pos_in = offset ? *offset : 0;
     while (copied_to_out < count) {
         size_t to_copy = count - copied_to_out > BUF_SIZE ? BUF_SIZE : count - copied_to_out;
 
