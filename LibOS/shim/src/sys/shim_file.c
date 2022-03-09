@@ -448,24 +448,9 @@ long shim_do_sendfile(int out_fd, int in_fd, off_t* offset, size_t count) {
         goto out;
     }
 
-    file_off_t old_offset = 0;
-
-    if (offset) {
-        if (!in_hdl->fs->fs_ops->seek) {
-            ret = -ESPIPE;
-            goto out;
-        }
-
-        old_offset = in_hdl->fs->fs_ops->seek(in_hdl, 0, SEEK_CUR);
-        if (old_offset < 0) {
-            ret = old_offset;
-            goto out;
-        }
-
-        ret = in_hdl->fs->fs_ops->seek(in_hdl, *offset, SEEK_SET);
-        if (ret < 0) {
-            goto out;
-        }
+    if (offset && !in_hdl->fs->fs_ops->seek) {
+        ret = -ESPIPE;
+        goto out;
     }
 
     int mode = out_hdl->flags & O_ACCMODE;
@@ -475,10 +460,11 @@ long shim_do_sendfile(int out_fd, int in_fd, off_t* offset, size_t count) {
         goto out;
     }
 
+    file_off_t pos_in = offset ? *offset : 0;
     while (copied_to_out < count) {
         size_t to_copy = count - copied_to_out > BUF_SIZE ? BUF_SIZE : count - copied_to_out;
 
-        ssize_t x = in_hdl->fs->fs_ops->read(in_hdl, buf, to_copy);
+        ssize_t x = in_hdl->fs->fs_ops->read(in_hdl, buf, to_copy, &pos_in);
         if (x < 0) {
             ret = x;
             goto out;
@@ -492,7 +478,9 @@ long shim_do_sendfile(int out_fd, int in_fd, off_t* offset, size_t count) {
             break;
         }
 
-        ssize_t y = out_hdl->fs->fs_ops->write(out_hdl, buf, x);
+        lock(&out_hdl->pos_lock);
+        ssize_t y = out_hdl->fs->fs_ops->write(out_hdl, buf, x, &out_hdl->pos);
+        unlock(&out_hdl->pos_lock);
         if (y < 0) {
             ret = y;
             goto out;
@@ -511,14 +499,7 @@ long shim_do_sendfile(int out_fd, int in_fd, off_t* offset, size_t count) {
     }
 
     if (offset) {
-        /* manpage: "if offset != NULL, then sendfile() does not modify file offset of in_fd..." */
-        ret = in_hdl->fs->fs_ops->seek(in_hdl, old_offset, SEEK_SET);
-        if (ret < 0) {
-            goto out;
-        }
-
-        /* "...and the file offset will be updated by the call" */
-        *offset = *offset + read_from_in;
+        *offset = pos_in;
     }
 
     ret = 0;
