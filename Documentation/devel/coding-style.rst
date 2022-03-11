@@ -159,7 +159,9 @@ Conventions and high-level style
 Python
 ------
 
-.. todo:: TBD
+#. Executable Python scripts must use the shebang with the hardcoded path to
+   system Python. Since Gramine currently supports Debian/Ubuntu and
+   CentOS/RHEL/Fedora distros, the shebang must be ``#!/usr/bin/python3``.
 
 Meson
 -----
