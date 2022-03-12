@@ -626,12 +626,6 @@ int init_protected_files(void) {
     }
 
     if (protected_files_key_str) {
-        if (strlen(protected_files_key_str) != PF_KEY_SIZE * 2) {
-            log_error("Malformed 'sgx.insecure__protected_files_key' value in the manifest because of size");
-            free(protected_files_key_str);
-            return -PAL_ERROR_INVAL;
-        }
-
         memset(g_pf_wrap_key, 0, sizeof(g_pf_wrap_key));
         for (size_t i = 0; i < strlen(protected_files_key_str); i++) {
             int8_t val = hex2dec(protected_files_key_str[i]);
